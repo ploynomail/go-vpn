@@ -143,6 +143,18 @@ func DefaultConfig() *quic.Config {
 	}
 }
 
+// decodePacket 从提供的 QUIC 流中读取并解码数据包。
+// 它首先读取前两个字节以确定数据包的大小，
+// 然后根据大小读取剩余的字节。该函数返回
+// 读取的总字节数以及读取操作期间遇到的任何错误。
+//
+// 参数：
+// - str：要读取的 QUIC 流。
+// - buffer：用于存储读取数据的字节切片。
+//
+// 返回：
+// - int：读取的总字节数。
+// - error：读取操作期间遇到的任何错误。
 func decodePacket(str quic.Stream, buffer []byte) (int, error) {
 	nread, err := io.ReadFull(str, buffer[:2])
 	if err != nil {
@@ -167,6 +179,27 @@ func Pong(reader io.Reader) error {
 	_, err := io.ReadFull(reader, buffer)
 	return err
 }
+
+// runReaders 初始化并管理多个 QUIC 流以读取数据。
+//
+// 它启动指定数量的读取器流，要么接受传入的
+// 流，要么根据“accept”参数打开新的流。每个流
+// 读取数据包并将其发送到提供的通道。
+//
+// 参数：
+// - pool：用于缓冲数据的字节切片池。
+// - conn：用于接受或打开流的 QUIC 连接。
+// - mystreams：要管理的 QUIC 流切片。
+// - ch：发送缓冲数据的通道。
+// - accept：一个布尔值，指示是否接受传入流（true）
+// 或打开新流（false）。
+//
+// 返回：
+// - 如果任何流无法被接受或打开，或者在操作期间发生任何其他
+// 错误，则会出现错误。
+//
+// 该函数记录读取器流的开始和停止，并确保
+// 所有流都已正确关闭且通道在返回之前已关闭。
 func runReaders(pool *pool.Pool[[]byte], conn quic.Connection, mystreams []quic.Stream, ch chan Buffer, accept bool) error {
 	log.Printf("Starting %d reader streams...\n", len(mystreams))
 	defer func() {
@@ -222,6 +255,20 @@ func runReaders(pool *pool.Pool[[]byte], conn quic.Connection, mystreams []quic.
 	return nil
 }
 
+// qRead 将数据从通道读取到提供的缓冲区中。
+//
+// 参数：
+// - pool：用于高效内存管理的字节切片池。
+// - from：接收 Buffer 对象的通道。
+// - buffer：将复制读取数据的字节切片。
+//
+// 返回：
+// - int：复制到缓冲区的字节数。
+// - error：如果读取操作失败，则出现错误；如果通道已关闭，则出现 io.EOF。
+//
+// 可能的错误：
+// - io.EOF：如果通道已关闭，并且没有更多可用数据。
+// - io.ErrShortBuffer：如果提供的缓冲区太小，无法容纳数据。
 func qRead(pool *pool.Pool[[]byte], from chan Buffer, buffer []byte) (int, error) {
 	read, ok := <-from
 	if !ok {

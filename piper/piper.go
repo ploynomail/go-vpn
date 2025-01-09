@@ -33,6 +33,15 @@ func (v *Pipe) AtomicExecute(target func()) {
 	target()
 }
 
+// ExecuteControlCommand 通过传输层发送控制命令并等待回复。
+// 它以原子方式执行命令以确保线程安全。
+//
+// 参数：
+// - cmd：要发送的控制命令。
+//
+// 返回：
+// - message.Command：从传输层收到的回复命令。
+// - error：如果发送或接收命令时出现问题，则会出现错误。
 func (v *Pipe) ExecuteControlCommand(cmd message.Command) (message.Command, error) {
 	var result message.Command
 	var rerr error
@@ -56,6 +65,18 @@ func (v *Pipe) ExecuteControlCommand(cmd message.Command) (message.Command, erro
 	return result, rerr
 }
 
+// ProcessControlCommand 处理通过传输层接收到的控制命令。
+// 它读取命令，检查其是否与预期类型匹配，然后使用提供的处理程序函数对其进行处理。
+// 如果命令类型与预期类型不匹配，则发送失败响应。
+// 如果成功处理命令，则通过传输层发回响应。
+//
+// 参数：
+// - expectedType：要处理的命令的预期类型。
+// - handler：以命令为输入并返回响应命令的函数。
+//
+// 返回：
+// - error：如果读取命令时出现问题、命令类型与预期类型不匹配，
+// 或者写入响应命令时出现问题，则会出现错误。
 func (v *Pipe) ProcessControlCommand(expectedType message.CMD_TYPE, handler func(cmd message.Command) message.Command) error {
 	var err error
 	v.AtomicExecute(func() {
@@ -176,7 +197,15 @@ func (v *Pipe) Run(ctx context.Context, is_server bool) error {
 	return nil
 }
 
-// Handle a command and give a reply
+// 处理命令并给出答复
+// file_to_transport 从文件读取数据并将其写入传输连接。
+// 它循环运行，直到上下文被取消或发生错误。
+// 该函数记录进程的开始和结束，以及遇到的任何错误。
+// 它还更新上传的字节统计信息。
+//
+// 参数：
+// - ctx：控制函数取消的上下文。
+// - wg：函数完成时发出信号的等待组。
 func (v *Pipe) file_to_transport(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var tag = "tun dev -> transport"
@@ -227,6 +256,14 @@ func (v *Pipe) file_to_transport(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
+// transport_to_file 从 Transport 读取数据并将其写入 TUN 接口。
+// 它循环运行，直到上下文被取消或发生错误。
+// 该函数记录操作的开始和结束，以及遇到的任何错误。
+// 它还更新下载的字节统计信息。
+//
+// 参数：
+// - ctx：控制操作取消的上下文。
+// - wg：函数完成时发出信号的等待组。
 func (v *Pipe) transport_to_file(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var tag = "transport -> tun dev"
